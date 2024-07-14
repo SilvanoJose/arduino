@@ -17,14 +17,14 @@ const char* mqtt_server = "broker.emqx.io";
 const int mqtt_port = 1883;
 const char* mqtt_user = "USUARIO_MQTT";
 const char* mqtt_password = "SENHA_MQTT";
-const char* mqtt_topic1 = "silvanojose/tomada1";
-const char* mqtt_topic2 = "silvanojose/tomada2";
-const char* mqtt_topic3 = "silvanojose/tomada3";
-const char* mqtt_topic4 = "silvanojose/tomada4";
-const char* mqtt_temp_box = "silvanojose/temperaturaBoxTomadas";
-const char* mqtt_schedule = "silvanojose/schedule";
-const char* mqtt_status = "silvanojose/statusTomadas";
-const char* mqtt_topic_format = "silvanojose/format";
+const char* mqtt_topic1 = "silvanojose.tcc/tomada1";
+const char* mqtt_topic2 = "silvanojose.tcc/tomada2";
+const char* mqtt_topic3 = "silvanojose.tcc/tomada3";
+const char* mqtt_topic4 = "silvanojose.tcc/tomada4";
+const char* mqtt_temp_box = "silvanojose.tcc/temperaturaBoxTomadas";
+const char* mqtt_schedule = "silvanojose.tcc/schedule";
+const char* mqtt_status = "silvanojose.tcc/statusTomadas";
+const char* mqtt_topic_format = "silvanojose.tcc/format";
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
@@ -127,7 +127,7 @@ void reconnect() {
   boolean willRetain = true;
   // Loop até reconectar
   while (!client.connected()) {
-    Serial.print("Reconectando MQTT...");
+    Serial.println("Reconectando MQTT...");
     // Cria identificação randômica do cliente
     String clientId = "ESP8266Client-";
     clientId += String(random(0xffff), HEX);
@@ -182,7 +182,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
     writeLedStateToFile(ledStatus[tomada], String("/led_state" + String(tomada + 1) + ".txt").c_str());
     Serial.print("Callback recebeu notificação do tópico tomada" + String(tomada + 1) + " :");
     Serial.println(value);
-  } else if (String(topic) == "silvanojose/schedule") {
+  } else if (String(topic) == "silvanojose.tcc/schedule") {
     Serial.println("Recebeu mensagem de schedule..");
     // Extrair dados do payload (supondo que a mensagem tenha o formato "dia,tomada,scheduleIndex,horaOn,minutoOn,horaOff,minutoOff")
     int dayOfWeek = message.substring(0, message.indexOf(',')).toInt();
@@ -415,7 +415,7 @@ void readSchedules() {
 void handleLigar(int tomada) {
   digitalWrite(ledPins[tomada], HIGH);
   ledStatus[tomada] = true;
-  client.publish((String("silvanojose/tomada") + String(tomada + 1)).c_str(), "1");
+  client.publish((String("silvanojose.tcc/tomada") + String(tomada + 1)).c_str(), "1");
   writeLedStateToFile(ledStatus[tomada], (String("/led_state") + String(tomada + 1) + ".txt").c_str());
   Serial.println("Ligando tomada " + String(tomada + 1));
 }
@@ -423,7 +423,7 @@ void handleLigar(int tomada) {
 void handleDesligar(int tomada) {
   digitalWrite(ledPins[tomada], LOW);
   ledStatus[tomada] = false;
-  client.publish((String("silvanojose/tomada") + String(tomada + 1)).c_str(), "0");
+  client.publish((String("silvanojose.tcc/tomada") + String(tomada + 1)).c_str(), "0");
   writeLedStateToFile(ledStatus[tomada], (String("/led_state") + String(tomada + 1) + ".txt").c_str());
   Serial.println("Desligando tomada " + String(tomada + 1));
 }
