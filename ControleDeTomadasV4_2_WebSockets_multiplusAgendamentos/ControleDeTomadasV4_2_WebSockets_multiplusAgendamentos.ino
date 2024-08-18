@@ -35,7 +35,7 @@ WiFiClient espClient;
 PubSubClient client(espClient);
 unsigned long lastMsg = 0;
 
-const int ledPins[4] = {27, 26, 32, 33};
+const int ledPins[4] = {26, 27, 32, 33};
 bool ledStatus[4] = {false, false, false, false};
 
 struct Schedule {
@@ -74,7 +74,9 @@ void setup() {
   }
   Serial.println("Conectado ao servidor NTP!");
 
-  for (int i = 1; i < 5; i++) {
+  for (int i = 0; i < 4; i++) {
+    Serial.print("Dentro do setup, carregamento dos pinos ");
+    Serial.println(ledPins[i]);
     pinMode(ledPins[i], OUTPUT);
     digitalWrite(ledPins[i], LOW);
   }
@@ -158,29 +160,33 @@ void reconnect() {
 
 void callback(char* topic, byte* payload, unsigned int length) {
   String message;
-  //Serial.print("Mensagem chegando [");
-  //Serial.print(topic);
-  //Serial.print("] ");
+  Serial.print("Mensagem chegando [");
+  Serial.print(topic);
+  Serial.print("] ");
   for (int i = 0; i < length; i++) {
-    //Serial.print((char)payload[i]);
+    Serial.print((char)payload[i]);
     message += (char)payload[i];
   }
-  Serial.println();
+  //Serial.print ("Conteudo do payload ");
+  // Serial.println(message);
 
   // Verificar qual tópico recebeu a mensagem
   int tomada = -1;
-  if (String(topic) == mqtt_topic1) tomada = 1;
-  else if (String(topic) == mqtt_topic2) tomada = 2;
-  else if (String(topic) == mqtt_topic3) tomada = 3;
-  else if (String(topic) == mqtt_topic4) tomada = 4;
+  if (String(topic) == mqtt_topic1) tomada = 0;
+  else if (String(topic) == mqtt_topic2) tomada = 1;
+  else if (String(topic) == mqtt_topic3) tomada = 2;
+  else if (String(topic) == mqtt_topic4) tomada = 3;
+  Serial.println(tomada);
 
   if (tomada != -1) {
     Serial.println("Recebeu mensagem de ligar/desligar..");
     int value = message.toInt();
+    Serial.print("LedPin numero: ");
+    Serial.println(ledPins[tomada]);
     digitalWrite(ledPins[tomada], value);
     ledStatus[tomada] = value;
     writeLedStateToFile(ledStatus[tomada], String("/led_state" + String(tomada + 1) + ".txt").c_str());
-    Serial.print("Callback recebeu notificação do tópico tomada" + String(tomada + 1) + " :");
+    Serial.print("Callback recebeu notificação do tópico tomada " + String(tomada + 1) + " :");
     Serial.println(value);
   } else if (String(topic) == "silvanojose.tcc/schedule") {
     Serial.println("Recebeu mensagem de schedule..");
@@ -244,8 +250,7 @@ void checkSchedules() {
   unsigned long epochTime = timeClient.getEpochTime();
   unsigned long localEpochTime = epochTime - (3 * 3600);  // Ajuste para o fuso horário local
   time_t currentTime = (time_t)localEpochTime;
-  struct tm *timeInfo;
-  timeInfo = localtime(&currentTime);
+  struct tm *timeInfo = localtime(&currentTime);
   int currentDayOfWeek = timeInfo->tm_wday;
   int currentHour = timeInfo->tm_hour;
   int currentMinute = timeInfo->tm_min;
@@ -264,12 +269,12 @@ void checkSchedules() {
 
   // Verifica se há agendamentos para o dia atual
   if (schedules.find(currentDayOfWeek) != schedules.end()) {
-    for (int tomada = 1; tomada < 5; tomada++) {
+    for (int tomada = 0; tomada < 4; tomada++) {  // Alterei de 1-4 para 0-3
       // Verifica se há agendamentos para a tomada atual
       if (schedules[currentDayOfWeek].find(tomada) != schedules[currentDayOfWeek].end()) {
         for (const auto& schedule : schedules[currentDayOfWeek][tomada]) {
           Serial.print("Verificando tomada ");
-          Serial.print(tomada);
+          Serial.print(tomada + 1);
           Serial.print(": ");
           Serial.print((schedule.hourOn < 10 ? "0" : "") + String(schedule.hourOn));
           Serial.print(":");
@@ -280,24 +285,29 @@ void checkSchedules() {
           Serial.println((schedule.minuteOff < 10 ? "0" : "") + String(schedule.minuteOff));
           
           if (currentHour == schedule.hourOn && currentMinute == schedule.minuteOn) {
-            Serial.print("Ligando tomada ");
-            Serial.println(tomada);
-            handleLigar(tomada);
+            if (!ledStatus[tomada]) {  // Verifica se já está ligado
+              Serial.print("Ligando tomada, vai chamar Handler");
+              Serial.println(tomada);
+              handleLigar(tomada);
+            }
           } else if (currentHour == schedule.hourOff && currentMinute == schedule.minuteOff) {
-            Serial.print("Desligando tomada ");
-            Serial.println(tomada);
-            handleDesligar(tomada);
+            if (ledStatus[tomada]) {  // Verifica se já está desligado
+              Serial.print("Desligando tomada, vai chamar Handler ");
+              Serial.println(tomada);
+              handleDesligar(tomada);
+            }
           }
         }
       } else {
         Serial.print("Nenhum agendamento para tomada ");
-        Serial.println(tomada);
+        Serial.println(tomada + 1);
       }
     }
   } else {
     Serial.println("Nenhum agendamento para o dia atual.");
   }
 }
+
 
 
 
@@ -413,6 +423,8 @@ void readSchedules() {
 
 
 void handleLigar(int tomada) {
+  Serial.print("Dentro do Handler, vai ligar pino ");
+  Serial.println(tomada);
   digitalWrite(ledPins[tomada], HIGH);
   ledStatus[tomada] = true;
   client.publish((String("silvanojose.tcc/tomada") + String(tomada + 1)).c_str(), "1");
@@ -421,6 +433,8 @@ void handleLigar(int tomada) {
 }
 
 void handleDesligar(int tomada) {
+    Serial.print("Dentro do Handler, vai desligar pino ");
+  Serial.println(tomada);
   digitalWrite(ledPins[tomada], LOW);
   ledStatus[tomada] = false;
   client.publish((String("silvanojose.tcc/tomada") + String(tomada + 1)).c_str(), "0");

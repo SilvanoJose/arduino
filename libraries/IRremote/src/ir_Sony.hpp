@@ -52,7 +52,7 @@
  // 7 command bits
  +1300,- 450 +1350,- 450 +1300,- 450 + 700,- 450
  + 700,- 450 + 750,- 450 + 700,- 400
- // (5,8,) 13 address bits
+ // (5,8,) 13 address bits and NO stop bit!
  +1300,- 500
  + 700,- 450 + 700,- 450 +1300,- 500 +1300,- 450
  +1300,- 450 + 700,- 450 +1350,- 400 + 750,- 450
@@ -213,7 +213,7 @@ bool IRrecv::decodeSonyMSB(decode_results *aResults) {
 /**
  * Old version with MSB first data
  */
-void IRsend::sendSony(unsigned long data, int nbits) {
+void IRsend::sendSonyMSB(unsigned long data, int nbits) {
     // Set IR carrier frequency
     enableIROut (SONY_KHZ);
 
@@ -223,6 +223,9 @@ void IRsend::sendSony(unsigned long data, int nbits) {
 
     // Old version with MSB first Data
     sendPulseDistanceWidthData(SONY_ONE_MARK, SONY_SPACE, SONY_ZERO_MARK, SONY_SPACE, data, nbits, PROTOCOL_IS_MSB_FIRST);
+}
+void IRsend::sendSony(unsigned long data, int nbits) {
+    sendSonyMSB(data, nbits);
 }
 
 /** @}*/

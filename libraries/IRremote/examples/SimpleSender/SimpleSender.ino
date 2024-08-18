@@ -29,6 +29,8 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
 
     Serial.begin(115200);
+    while (!Serial)
+        ; // Wait for Serial to become available. Is optimized away for some cores.
 
     // Just to know which program is running on my Arduino
     Serial.println(F("START " __FILE__ " from " __DATE__ "\r\nUsing library version " VERSION_IRREMOTE));
@@ -67,6 +69,18 @@ void loop() {
 
     // Receiver output for the first loop must be: Protocol=NEC Address=0x102 Command=0x34 Raw-Data=0xCB340102 (32 bits)
     IrSender.sendNEC(0x00, sCommand, sRepeats);
+
+    /*
+     * If you want to send a raw HEX value directly like e.g. 0xCB340102 you must use sendNECRaw()
+     */
+//    Serial.println(F("Send 32 bit LSB 0xCB340102 with NECRaw()"));
+//    IrSender.sendNECRaw(0xCB340102, sRepeats);
+
+    /*
+     * If you want to send an "old" MSB HEX value used by IRremote versions before 3.0 like e.g. 0x40802CD3 you must use sendNECMSB()
+     */
+//    Serial.println(F("Send old 32 bit MSB 0x40802CD3 with sendNECMSB()"));
+//    IrSender.sendNECMSB(0x40802CD3, 32, sRepeats);
 
     /*
      * Increment send values
