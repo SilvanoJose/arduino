@@ -25,6 +25,7 @@ const char* mqtt_temp_box = "silvanojose.tcc/temperaturaBoxTomadas";
 const char* mqtt_schedule = "silvanojose.tcc/schedule";
 const char* mqtt_status = "silvanojose.tcc/statusTomadas";
 const char* mqtt_topic_format = "silvanojose.tcc/format";
+const char* mqtt_topic_print = "silvanojose.tcc/serialprints";
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org");
@@ -60,6 +61,17 @@ void handleLigar(int tomada);
 void handleDesligar(int tomada);
 void writeLedStateToFile(bool state, const char* fileName);
 void restoreLedState();
+
+void publishSerialPrint(String messageTopic) {
+    if (client.connected()) {
+        bool success = client.publish("silvanojose.tcc/serialprints", messageTopic.c_str());
+        if (!success) {
+            Serial.println("Falha ao publicar a mensagem: " + messageTopic);
+        }
+    } else {
+        Serial.println("MQTT não está conectado, mensagem não publicada: " + messageTopic);
+    }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -163,7 +175,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
     Serial.print("Mensagem chegando [");
     Serial.print(topic);
     Serial.print("] ");
-   
+    String messageTopic = "Mensagem [" + String(topic) + "] ";
+    //publishSerialPrint(messageTopic);
+    //Serial.println("Depois de publicar o topico.." + messageTopic);
+    //delay(3000);
+    //Serial.println("Depois do publishSerialPrint - Antes delay..");
+
     for (int i = 0; i < length; i++) {
         Serial.print((char)payload[i]);
         message += (char)payload[i];
@@ -219,6 +236,8 @@ void callback(char* topic, byte* payload, unsigned int length) {
             formatSPIFFS();
         }
     }
+  messageTopic += message;
+  publishSerialPrint(messageTopic);
 }
 
 
@@ -493,4 +512,3 @@ void restoreLedState() {
     }
   }
 }
-
