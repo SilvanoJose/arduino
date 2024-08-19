@@ -159,62 +159,65 @@ void reconnect() {
 }
 
 void callback(char* topic, byte* payload, unsigned int length) {
-  String message;
-  Serial.print("Mensagem chegando [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-    message += (char)payload[i];
-  }
-  //Serial.print ("Conteudo do payload ");
-  // Serial.println(message);
-
-  // Verificar qual tópico recebeu a mensagem
-  int tomada = -1;
-  if (String(topic) == mqtt_topic1) tomada = 0;
-  else if (String(topic) == mqtt_topic2) tomada = 1;
-  else if (String(topic) == mqtt_topic3) tomada = 2;
-  else if (String(topic) == mqtt_topic4) tomada = 3;
-  Serial.println(tomada);
-
-  if (tomada != -1) {
-    Serial.println("Recebeu mensagem de ligar/desligar..");
-    int value = message.toInt();
-    Serial.print("LedPin numero: ");
-    Serial.println(ledPins[tomada]);
-    digitalWrite(ledPins[tomada], value);
-    ledStatus[tomada] = value;
-    writeLedStateToFile(ledStatus[tomada], String("/led_state" + String(tomada + 1) + ".txt").c_str());
-    Serial.print("Callback recebeu notificação do tópico tomada " + String(tomada + 1) + " :");
-    Serial.println(value);
-  } else if (String(topic) == "silvanojose.tcc/schedule") {
-    Serial.println("Recebeu mensagem de schedule..");
-    // Extrair dados do payload (supondo que a mensagem tenha o formato "dia,tomada,scheduleIndex,horaOn,minutoOn,horaOff,minutoOff")
-    int dayOfWeek = message.substring(0, message.indexOf(',')).toInt();
-    message.remove(0, message.indexOf(',') + 1);
-    int pin = message.substring(0, message.indexOf(',')).toInt();
-    message.remove(0, message.indexOf(',') + 1);
-    int scheduleIndex = message.substring(0, message.indexOf(',')).toInt();
-    message.remove(0, message.indexOf(',') + 1);
-    int hourOn = message.substring(0, message.indexOf(',')).toInt();
-    message.remove(0, message.indexOf(',') + 1);
-    int minuteOn = message.substring(0, message.indexOf(',')).toInt();
-    message.remove(0, message.indexOf(',') + 1);
-    int hourOff = message.substring(0, message.indexOf(',')).toInt();
-    message.remove(0, message.indexOf(',') + 1);
-    int minuteOff = message.substring(0).toInt();
-
-    // Chamar a função para salvar o cronograma
-    saveSchedules(dayOfWeek, pin, scheduleIndex, hourOn, minuteOn, hourOff, minuteOff);
-    readSchedules(); // Recarregar os agendamentos
-
-  } else if (String(topic) == mqtt_topic_format) {
-    if (message == "format") {
-      Serial.println("Recebeu mensagem de format..");
-      formatSPIFFS();
+    String message;
+    //Serial.print("Mensagem chegando [");
+    //Serial.print(topic);
+    //Serial.print("] ");
+    for (int i = 0; i < length; i++) {
+        //Serial.print((char)payload[i]);
+        message += (char)payload[i];
     }
-  }
+    Serial.println();
+
+    // Verificar qual tópico recebeu a mensagem
+    int tomada = -1;
+    if (String(topic) == mqtt_topic1) tomada = 0;
+    else if (String(topic) == mqtt_topic2) tomada = 1;
+    else if (String(topic) == mqtt_topic3) tomada = 2;
+    else if (String(topic) == mqtt_topic4) tomada = 3;
+
+    if (tomada != -1) {
+        Serial.println("Recebeu mensagem de ligar/desligar..");
+        int value = message.toInt();
+        Serial.print("LedPin numero: ");
+        Serial.println(ledPins[tomada]);
+
+        // Acionar o pino diretamente sem publicar novamente no tópico
+        manipularPino(tomada, value);
+
+        Serial.print("Callback processou o comando para tomada ");
+        Serial.print(tomada + 1);
+        Serial.print(" com valor ");
+        Serial.println(value);
+    } 
+    else if (String(topic) == "silvanojose.tcc/schedule") {
+        Serial.println("Recebeu mensagem de schedule..");
+        
+        // Extrair dados do payload
+        int dayOfWeek = message.substring(0, message.indexOf(',')).toInt();
+        message.remove(0, message.indexOf(',') + 1);
+        int pin = message.substring(0, message.indexOf(',')).toInt();
+        message.remove(0, message.indexOf(',') + 1);
+        int scheduleIndex = message.substring(0, message.indexOf(',')).toInt();
+        message.remove(0, message.indexOf(',') + 1);
+        int hourOn = message.substring(0, message.indexOf(',')).toInt();
+        message.remove(0, message.indexOf(',') + 1);
+        int minuteOn = message.substring(0, message.indexOf(',')).toInt();
+        message.remove(0, message.indexOf(',') + 1);
+        int hourOff = message.substring(0, message.indexOf(',')).toInt();
+        message.remove(0, message.indexOf(',') + 1);
+        int minuteOff = message.substring(0).toInt();
+
+        // Chamar a função para salvar o cronograma
+        saveSchedules(dayOfWeek, (pin - 1), scheduleIndex, hourOn, minuteOn, hourOff, minuteOff);
+        readSchedules(); // Recarregar os agendamentos
+
+    } else if (String(topic) == mqtt_topic_format) {
+        if (message == "format") {
+            Serial.println("Recebeu mensagem de format..");
+            formatSPIFFS();
+        }
+    }
 }
 
 
@@ -246,117 +249,134 @@ void readTemperature() {
 }
 
 void checkSchedules() {
-  timeClient.update();
-  unsigned long epochTime = timeClient.getEpochTime();
-  unsigned long localEpochTime = epochTime - (3 * 3600);  // Ajuste para o fuso horário local
-  time_t currentTime = (time_t)localEpochTime;
-  struct tm *timeInfo = localtime(&currentTime);
-  int currentDayOfWeek = timeInfo->tm_wday;
-  int currentHour = timeInfo->tm_hour;
-  int currentMinute = timeInfo->tm_min;
-  int currentSecond = timeInfo->tm_sec;
+    timeClient.update();
+    unsigned long epochTime = timeClient.getEpochTime();
+    unsigned long localEpochTime = epochTime - (3 * 3600);  // Ajuste para o fuso horário local
+    time_t currentTime = (time_t)localEpochTime;
+    struct tm *timeInfo = localtime(&currentTime);
+    int currentDayOfWeek = timeInfo->tm_wday;
+    int currentHour = timeInfo->tm_hour;
+    int currentMinute = timeInfo->tm_min;
+    int currentSecond = timeInfo->tm_sec;
 
-  // Exibe a hora atual e o dia da semana no monitor serial
-  Serial.println("Entrou no checkSchedules...");
-  Serial.print("Hora: ");
-  Serial.print((currentHour < 10 ? "0" : "") + String(currentHour));
-  Serial.print(":");
-  Serial.print((currentMinute < 10 ? "0" : "") + String(currentMinute));
-  Serial.print(":");
-  Serial.print((currentSecond < 10 ? "0" : "") + String(currentSecond));
-  Serial.print(", Dia da semana: ");
-  Serial.println(currentDayOfWeek);
+    // Exibe a hora atual e o dia da semana no monitor serial
+    Serial.println("Entrou no checkSchedules...");
+    Serial.print("Hora: ");
+    Serial.print((currentHour < 10 ? "0" : "") + String(currentHour));
+    Serial.print(":");
+    Serial.print((currentMinute < 10 ? "0" : "") + String(currentMinute));
+    Serial.print(":");
+    Serial.print((currentSecond < 10 ? "0" : "") + String(currentSecond));
+    Serial.print(", Dia da semana: ");
+    Serial.println(currentDayOfWeek);
 
-  // Verifica se há agendamentos para o dia atual
-  if (schedules.find(currentDayOfWeek) != schedules.end()) {
-    for (int tomada = 0; tomada < 4; tomada++) {  // Alterei de 1-4 para 0-3
-      // Verifica se há agendamentos para a tomada atual
-      if (schedules[currentDayOfWeek].find(tomada) != schedules[currentDayOfWeek].end()) {
-        for (const auto& schedule : schedules[currentDayOfWeek][tomada]) {
-          Serial.print("Verificando tomada ");
-          Serial.print(tomada + 1);
-          Serial.print(": ");
-          Serial.print((schedule.hourOn < 10 ? "0" : "") + String(schedule.hourOn));
-          Serial.print(":");
-          Serial.print((schedule.minuteOn < 10 ? "0" : "") + String(schedule.minuteOn));
-          Serial.print(" - ");
-          Serial.print((schedule.hourOff < 10 ? "0" : "") + String(schedule.hourOff));
-          Serial.print(":");
-          Serial.println((schedule.minuteOff < 10 ? "0" : "") + String(schedule.minuteOff));
-          
-          if (currentHour == schedule.hourOn && currentMinute == schedule.minuteOn) {
-            if (!ledStatus[tomada]) {  // Verifica se já está ligado
-              Serial.print("Ligando tomada, vai chamar Handler");
-              Serial.println(tomada);
-              handleLigar(tomada);
+    // Verifica se há agendamentos para o dia atual
+    if (schedules.find(currentDayOfWeek) != schedules.end()) {
+        for (int tomada = 0; tomada < 4; tomada++) {  // Alterei de 1-4 para 0-3
+            // Verifica se há agendamentos para a tomada atual
+            if (schedules[currentDayOfWeek].find(tomada) != schedules[currentDayOfWeek].end()) {
+                int scheduleIndex = 0; // Inicializa o índice do agendamento
+                for (const auto& schedule : schedules[currentDayOfWeek][tomada]) {
+                    Serial.print("Verificando tomada ");
+                    Serial.print(tomada + 1);
+                    Serial.print(", Agendamento ");
+                    Serial.print(scheduleIndex + 1); // Mostra o número do agendamento
+                    Serial.print(": ");
+                    Serial.print((schedule.hourOn < 10 ? "0" : "") + String(schedule.hourOn));
+                    Serial.print(":");
+                    Serial.print((schedule.minuteOn < 10 ? "0" : "") + String(schedule.minuteOn));
+                    Serial.print(" - ");
+                    Serial.print((schedule.hourOff < 10 ? "0" : "") + String(schedule.hourOff));
+                    Serial.print(":");
+                    Serial.println((schedule.minuteOff < 10 ? "0" : "") + String(schedule.minuteOff));
+                    
+                    if (currentHour == schedule.hourOn && currentMinute == schedule.minuteOn) {
+                        if (!ledStatus[tomada]) {  // Verifica se já está ligado
+                            Serial.print("Ligando tomada, vai chamar Handler");
+                            Serial.println(tomada);
+                            handleLigar(tomada);
+                        }
+                    } else if (currentHour == schedule.hourOff && currentMinute == schedule.minuteOff) {
+                        if (ledStatus[tomada]) {  // Verifica se já está desligado
+                            Serial.print("Desligando tomada, vai chamar Handler ");
+                            Serial.println(tomada);
+                            handleDesligar(tomada);
+                        }
+                    }
+                    
+                    scheduleIndex++; // Incrementa o índice do agendamento
+                }
+            } else {
+                Serial.print("Nenhum agendamento para tomada ");
+                Serial.println(tomada + 1);
             }
-          } else if (currentHour == schedule.hourOff && currentMinute == schedule.minuteOff) {
-            if (ledStatus[tomada]) {  // Verifica se já está desligado
-              Serial.print("Desligando tomada, vai chamar Handler ");
-              Serial.println(tomada);
-              handleDesligar(tomada);
-            }
-          }
         }
-      } else {
-        Serial.print("Nenhum agendamento para tomada ");
-        Serial.println(tomada + 1);
-      }
+    } else {
+        Serial.println("Nenhum agendamento para o dia atual.");
     }
-  } else {
-    Serial.println("Nenhum agendamento para o dia atual.");
-  }
 }
 
 
 
 
 void saveSchedules(int dayOfWeek, int pin, int scheduleIndex, int hourOn, int minuteOn, int hourOff, int minuteOff) {
-  String fileName = "/schedule_" + String(dayOfWeek) + ".txt";
-  String newLine = String(pin) + "," + String(scheduleIndex) + "," +
-                   (hourOn < 10 ? "0" : "") + String(hourOn) + ":" + (minuteOn < 10 ? "0" : "") + String(minuteOn) + "," +
-                   (hourOff < 10 ? "0" : "") + String(hourOff) + ":" + (minuteOff < 10 ? "0" : "") + String(minuteOff) + "\n";
-  String fileContent = "";
-  bool scheduleExists = false;
+    String fileName = "/schedule_" + String(dayOfWeek) + ".txt";
+    String newLine = String(pin) + "," + String(scheduleIndex) + "," +
+                     (hourOn < 10 ? "0" : "") + String(hourOn) + ":" + (minuteOn < 10 ? "0" : "") + String(minuteOn) + "," +
+                     (hourOff < 10 ? "0" : "") + String(hourOff) + ":" + (minuteOff < 10 ? "0" : "") + String(minuteOff) + "\n";
+    String fileContent = "";
+    bool scheduleExists = false;
 
-  // Ler horários existentes
-  File file = SPIFFS.open(fileName, "r");
-  if (file) {
-    while (file.available()) {
-      String line = file.readStringUntil('\n');
-      if (!line.isEmpty()) {
-        int comma1 = line.indexOf(',');
-        int comma2 = line.indexOf(',', comma1 + 1);
-        int existingPin = line.substring(0, comma1).toInt();
-        int existingScheduleIndex = line.substring(comma1 + 1, comma2).toInt();
+    Serial.println("Salvando agendamento para o dia da semana: " + String(dayOfWeek));
+    Serial.println("Novo agendamento: " + newLine);
 
-        // Substituir se já existir um agendamento com o mesmo pin e scheduleIndex
-        if (existingPin == pin && existingScheduleIndex == scheduleIndex) {
-          fileContent += newLine; // Substituir o agendamento existente
-          scheduleExists = true;
-        } else {
-          fileContent += line + "\n"; // Manter o agendamento existente
+    // Ler horários existentes
+    File file = SPIFFS.open(fileName, "r");
+    if (file) {
+        while (file.available()) {
+            String line = file.readStringUntil('\n');
+            if (!line.isEmpty()) {
+                int comma1 = line.indexOf(',');
+                int comma2 = line.indexOf(',', comma1 + 1);
+                int existingPin = line.substring(0, comma1).toInt();
+                int existingScheduleIndex = line.substring(comma1 + 1, comma2).toInt();
+
+                Serial.println("Horário existente encontrado: " + line);
+                Serial.println("Pin existente: " + String(existingPin) + ", ScheduleIndex existente: " + String(existingScheduleIndex));
+                Serial.println("Comparando com Pin: " + String(pin) + ", ScheduleIndex: " + String(scheduleIndex));
+
+                // Substituir se já existir um agendamento com o mesmo pin e scheduleIndex
+                if (existingPin == pin && existingScheduleIndex == scheduleIndex) {
+                    fileContent += newLine; // Substituir o agendamento existente
+                    scheduleExists = true;
+                    Serial.println("Agendamento existente substituído.");
+                } else {
+                    fileContent += line + "\n"; // Manter o agendamento existente
+                }
+            }
         }
-      }
+        file.close();
+    } else {
+        Serial.println("Arquivo não encontrado, criando novo.");
     }
-    file.close();
-  }
 
-  // Adicionar novo agendamento se ele não existir
-  if (!scheduleExists) {
-    fileContent += newLine;
-  }
+    // Adicionar novo agendamento se ele não existir
+    if (!scheduleExists) {
+        fileContent += newLine;
+        Serial.println("Novo agendamento adicionado.");
+    }
 
-  // Escrever horários atualizados de volta no arquivo
-  file = SPIFFS.open(fileName, "w");
-  if (file) {
-    file.print(fileContent);
-    file.close();
-    Serial.println("Horário salvo com sucesso.");
-  } else {
-    Serial.println("Erro ao abrir o arquivo " + fileName + " para escrita.");
-  }
+    // Escrever horários atualizados de volta no arquivo
+    file = SPIFFS.open(fileName, "w");
+    if (file) {
+        file.print(fileContent);
+        file.close();
+        Serial.println("Horário salvo com sucesso.");
+    } else {
+        Serial.println("Erro ao abrir o arquivo " + fileName + " para escrita.");
+    }
 }
+
 
 void readSchedules() {
   Serial.println("Lendo horários salvos...");
@@ -419,6 +439,13 @@ void readSchedules() {
       Serial.println("Erro ao abrir o arquivo " + fileName);
     }
   }
+}
+
+void manipularPino(int tomada, int valor) {
+    digitalWrite(ledPins[tomada], valor);
+    ledStatus[tomada] = (valor == HIGH);
+    writeLedStateToFile(ledStatus[tomada], String("/led_state" + String(tomada + 1) + ".txt").c_str());
+    Serial.println("Pino da tomada " + String(tomada + 1) + " ajustado para " + String(valor == HIGH ? "HIGH" : "LOW"));
 }
 
 
